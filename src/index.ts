@@ -120,8 +120,6 @@ export async function call_rpc(
       throw 'No response';
     }
 
-    console.log("call_rpc", "value", value, "request", request);
-
     if (value.requestId != request.requestId) {
       throw 'Mismatch request IDs';
     }
