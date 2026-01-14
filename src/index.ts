@@ -32,7 +32,7 @@ export function create_rpc_connection(transport: RpcTransport, opts?: CreateRpcC
     .pipeThrough(new TransformStream(get_encoder()), { signal: opts?.signal })
     .pipeTo(transport.writable, { signal: opts?.signal });
 
-  reqPipelineClosed.catch((r) => {console.log("Closed error", r); return r}).then(async (reason: any) => {
+  reqPipelineClosed.catch((r) => { console.log("Closed error", r); return r }).then(async (reason: any) => {
     await byte_readable.cancel();
     transport.abortController.abort(reason);
   });
@@ -119,6 +119,8 @@ export async function call_rpc(
     if (done || !value) {
       throw 'No response';
     }
+
+    console.log("call_rpc", "value", value, "request", request);
 
     if (value.requestId != request.requestId) {
       throw 'Mismatch request IDs';
