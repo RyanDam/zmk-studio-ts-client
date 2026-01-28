@@ -10,6 +10,45 @@ import { BehaviorBinding } from "./keymap";
 
 export const protobufPackage = "zmk.macros";
 
+export enum MacroMode {
+  MACRO_MODE_TAP = 0,
+  MACRO_MODE_PRESS = 1,
+  MACRO_MODE_RELEASE = 2,
+  UNRECOGNIZED = -1,
+}
+
+export function macroModeFromJSON(object: any): MacroMode {
+  switch (object) {
+    case 0:
+    case "MACRO_MODE_TAP":
+      return MacroMode.MACRO_MODE_TAP;
+    case 1:
+    case "MACRO_MODE_PRESS":
+      return MacroMode.MACRO_MODE_PRESS;
+    case 2:
+    case "MACRO_MODE_RELEASE":
+      return MacroMode.MACRO_MODE_RELEASE;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return MacroMode.UNRECOGNIZED;
+  }
+}
+
+export function macroModeToJSON(object: MacroMode): string {
+  switch (object) {
+    case MacroMode.MACRO_MODE_TAP:
+      return "MACRO_MODE_TAP";
+    case MacroMode.MACRO_MODE_PRESS:
+      return "MACRO_MODE_PRESS";
+    case MacroMode.MACRO_MODE_RELEASE:
+      return "MACRO_MODE_RELEASE";
+    case MacroMode.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export enum SetMacroDetailsResponse {
   SET_MACRO_DETAILS_RESP_OK = 0,
   SET_MACRO_DETAILS_RESP_ERR_GENERIC = 1,
@@ -76,14 +115,21 @@ export interface MacroInfo {
   maxSteps: number;
 }
 
+export interface MacroStep {
+  mode: MacroMode;
+  waitMs: number;
+  tapMs: number;
+  binding: BehaviorBinding | undefined;
+}
+
 export interface MacroDetails {
   index: number;
-  bindings: BehaviorBinding[];
+  steps: MacroStep[];
 }
 
 export interface SetMacroDetailsRequest {
   index: number;
-  bindings: BehaviorBinding[];
+  steps: MacroStep[];
 }
 
 export interface Notification {
@@ -410,8 +456,114 @@ export const MacroInfo = {
   },
 };
 
+function createBaseMacroStep(): MacroStep {
+  return { mode: 0, waitMs: 0, tapMs: 0, binding: undefined };
+}
+
+export const MacroStep = {
+  encode(message: MacroStep, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.mode !== 0) {
+      writer.uint32(8).int32(message.mode);
+    }
+    if (message.waitMs !== 0) {
+      writer.uint32(16).uint32(message.waitMs);
+    }
+    if (message.tapMs !== 0) {
+      writer.uint32(24).uint32(message.tapMs);
+    }
+    if (message.binding !== undefined) {
+      BehaviorBinding.encode(message.binding, writer.uint32(34).fork()).ldelim();
+    }
+    return writer;
+  },
+
+  decode(input: _m0.Reader | Uint8Array, length?: number): MacroStep {
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMacroStep();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if (tag !== 8) {
+            break;
+          }
+
+          message.mode = reader.int32() as any;
+          continue;
+        case 2:
+          if (tag !== 16) {
+            break;
+          }
+
+          message.waitMs = reader.uint32();
+          continue;
+        case 3:
+          if (tag !== 24) {
+            break;
+          }
+
+          message.tapMs = reader.uint32();
+          continue;
+        case 4:
+          if (tag !== 34) {
+            break;
+          }
+
+          message.binding = BehaviorBinding.decode(reader, reader.uint32());
+          continue;
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MacroStep {
+    return {
+      mode: isSet(object.mode) ? macroModeFromJSON(object.mode) : 0,
+      waitMs: isSet(object.waitMs) ? globalThis.Number(object.waitMs) : 0,
+      tapMs: isSet(object.tapMs) ? globalThis.Number(object.tapMs) : 0,
+      binding: isSet(object.binding) ? BehaviorBinding.fromJSON(object.binding) : undefined,
+    };
+  },
+
+  toJSON(message: MacroStep): unknown {
+    const obj: any = {};
+    if (message.mode !== 0) {
+      obj.mode = macroModeToJSON(message.mode);
+    }
+    if (message.waitMs !== 0) {
+      obj.waitMs = Math.round(message.waitMs);
+    }
+    if (message.tapMs !== 0) {
+      obj.tapMs = Math.round(message.tapMs);
+    }
+    if (message.binding !== undefined) {
+      obj.binding = BehaviorBinding.toJSON(message.binding);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<MacroStep>, I>>(base?: I): MacroStep {
+    return MacroStep.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MacroStep>, I>>(object: I): MacroStep {
+    const message = createBaseMacroStep();
+    message.mode = object.mode ?? 0;
+    message.waitMs = object.waitMs ?? 0;
+    message.tapMs = object.tapMs ?? 0;
+    message.binding = (object.binding !== undefined && object.binding !== null)
+      ? BehaviorBinding.fromPartial(object.binding)
+      : undefined;
+    return message;
+  },
+};
+
 function createBaseMacroDetails(): MacroDetails {
-  return { index: 0, bindings: [] };
+  return { index: 0, steps: [] };
 }
 
 export const MacroDetails = {
@@ -419,8 +571,8 @@ export const MacroDetails = {
     if (message.index !== 0) {
       writer.uint32(8).uint32(message.index);
     }
-    for (const v of message.bindings) {
-      BehaviorBinding.encode(v!, writer.uint32(18).fork()).ldelim();
+    for (const v of message.steps) {
+      MacroStep.encode(v!, writer.uint32(18).fork()).ldelim();
     }
     return writer;
   },
@@ -444,7 +596,7 @@ export const MacroDetails = {
             break;
           }
 
-          message.bindings.push(BehaviorBinding.decode(reader, reader.uint32()));
+          message.steps.push(MacroStep.decode(reader, reader.uint32()));
           continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
@@ -458,9 +610,7 @@ export const MacroDetails = {
   fromJSON(object: any): MacroDetails {
     return {
       index: isSet(object.index) ? globalThis.Number(object.index) : 0,
-      bindings: globalThis.Array.isArray(object?.bindings)
-        ? object.bindings.map((e: any) => BehaviorBinding.fromJSON(e))
-        : [],
+      steps: globalThis.Array.isArray(object?.steps) ? object.steps.map((e: any) => MacroStep.fromJSON(e)) : [],
     };
   },
 
@@ -469,8 +619,8 @@ export const MacroDetails = {
     if (message.index !== 0) {
       obj.index = Math.round(message.index);
     }
-    if (message.bindings?.length) {
-      obj.bindings = message.bindings.map((e) => BehaviorBinding.toJSON(e));
+    if (message.steps?.length) {
+      obj.steps = message.steps.map((e) => MacroStep.toJSON(e));
     }
     return obj;
   },
@@ -481,13 +631,13 @@ export const MacroDetails = {
   fromPartial<I extends Exact<DeepPartial<MacroDetails>, I>>(object: I): MacroDetails {
     const message = createBaseMacroDetails();
     message.index = object.index ?? 0;
-    message.bindings = object.bindings?.map((e) => BehaviorBinding.fromPartial(e)) || [];
+    message.steps = object.steps?.map((e) => MacroStep.fromPartial(e)) || [];
     return message;
   },
 };
 
 function createBaseSetMacroDetailsRequest(): SetMacroDetailsRequest {
-  return { index: 0, bindings: [] };
+  return { index: 0, steps: [] };
 }
 
 export const SetMacroDetailsRequest = {
@@ -495,8 +645,8 @@ export const SetMacroDetailsRequest = {
     if (message.index !== 0) {
       writer.uint32(8).uint32(message.index);
     }
-    for (const v of message.bindings) {
-      BehaviorBinding.encode(v!, writer.uint32(18).fork()).ldelim();
+    for (const v of message.steps) {
+      MacroStep.encode(v!, writer.uint32(18).fork()).ldelim();
     }
     return writer;
   },
@@ -520,7 +670,7 @@ export const SetMacroDetailsRequest = {
             break;
           }
 
-          message.bindings.push(BehaviorBinding.decode(reader, reader.uint32()));
+          message.steps.push(MacroStep.decode(reader, reader.uint32()));
           continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
@@ -534,9 +684,7 @@ export const SetMacroDetailsRequest = {
   fromJSON(object: any): SetMacroDetailsRequest {
     return {
       index: isSet(object.index) ? globalThis.Number(object.index) : 0,
-      bindings: globalThis.Array.isArray(object?.bindings)
-        ? object.bindings.map((e: any) => BehaviorBinding.fromJSON(e))
-        : [],
+      steps: globalThis.Array.isArray(object?.steps) ? object.steps.map((e: any) => MacroStep.fromJSON(e)) : [],
     };
   },
 
@@ -545,8 +693,8 @@ export const SetMacroDetailsRequest = {
     if (message.index !== 0) {
       obj.index = Math.round(message.index);
     }
-    if (message.bindings?.length) {
-      obj.bindings = message.bindings.map((e) => BehaviorBinding.toJSON(e));
+    if (message.steps?.length) {
+      obj.steps = message.steps.map((e) => MacroStep.toJSON(e));
     }
     return obj;
   },
@@ -557,7 +705,7 @@ export const SetMacroDetailsRequest = {
   fromPartial<I extends Exact<DeepPartial<SetMacroDetailsRequest>, I>>(object: I): SetMacroDetailsRequest {
     const message = createBaseSetMacroDetailsRequest();
     message.index = object.index ?? 0;
-    message.bindings = object.bindings?.map((e) => BehaviorBinding.fromPartial(e)) || [];
+    message.steps = object.steps?.map((e) => MacroStep.fromPartial(e)) || [];
     return message;
   },
 };
