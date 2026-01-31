@@ -94,16 +94,61 @@ export function setMacroDetailsResponseToJSON(object: SetMacroDetailsResponse): 
   }
 }
 
+export enum SaveChangesErrorCode {
+  SAVE_CHANGES_ERR_GENERIC = 0,
+  SAVE_CHANGES_ERR_NOT_SUPPORTED = 1,
+  SAVE_CHANGES_ERR_NO_SPACE = 2,
+  UNRECOGNIZED = -1,
+}
+
+export function saveChangesErrorCodeFromJSON(object: any): SaveChangesErrorCode {
+  switch (object) {
+    case 0:
+    case "SAVE_CHANGES_ERR_GENERIC":
+      return SaveChangesErrorCode.SAVE_CHANGES_ERR_GENERIC;
+    case 1:
+    case "SAVE_CHANGES_ERR_NOT_SUPPORTED":
+      return SaveChangesErrorCode.SAVE_CHANGES_ERR_NOT_SUPPORTED;
+    case 2:
+    case "SAVE_CHANGES_ERR_NO_SPACE":
+      return SaveChangesErrorCode.SAVE_CHANGES_ERR_NO_SPACE;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return SaveChangesErrorCode.UNRECOGNIZED;
+  }
+}
+
+export function saveChangesErrorCodeToJSON(object: SaveChangesErrorCode): string {
+  switch (object) {
+    case SaveChangesErrorCode.SAVE_CHANGES_ERR_GENERIC:
+      return "SAVE_CHANGES_ERR_GENERIC";
+    case SaveChangesErrorCode.SAVE_CHANGES_ERR_NOT_SUPPORTED:
+      return "SAVE_CHANGES_ERR_NOT_SUPPORTED";
+    case SaveChangesErrorCode.SAVE_CHANGES_ERR_NO_SPACE:
+      return "SAVE_CHANGES_ERR_NO_SPACE";
+    case SaveChangesErrorCode.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export interface Request {
   getMacroList?: boolean | undefined;
   getMacroDetails?: number | undefined;
   setMacroDetails?: SetMacroDetailsRequest | undefined;
+  checkUnsavedChanges?: boolean | undefined;
+  saveChanges?: boolean | undefined;
+  discardChanges?: boolean | undefined;
 }
 
 export interface Response {
   getMacroList?: MacroList | undefined;
   getMacroDetails?: MacroDetails | undefined;
   setMacroDetails?: SetMacroDetailsResponse | undefined;
+  checkUnsavedChanges?: boolean | undefined;
+  saveChanges?: SaveChangesResponse | undefined;
+  discardChanges?: boolean | undefined;
 }
 
 export interface MacroList {
@@ -132,11 +177,24 @@ export interface SetMacroDetailsRequest {
   steps: MacroStep[];
 }
 
+export interface SaveChangesResponse {
+  ok?: boolean | undefined;
+  err?: SaveChangesErrorCode | undefined;
+}
+
 export interface Notification {
+  unsavedChangesStatusChanged?: boolean | undefined;
 }
 
 function createBaseRequest(): Request {
-  return { getMacroList: undefined, getMacroDetails: undefined, setMacroDetails: undefined };
+  return {
+    getMacroList: undefined,
+    getMacroDetails: undefined,
+    setMacroDetails: undefined,
+    checkUnsavedChanges: undefined,
+    saveChanges: undefined,
+    discardChanges: undefined,
+  };
 }
 
 export const Request = {
@@ -149,6 +207,15 @@ export const Request = {
     }
     if (message.setMacroDetails !== undefined) {
       SetMacroDetailsRequest.encode(message.setMacroDetails, writer.uint32(26).fork()).ldelim();
+    }
+    if (message.checkUnsavedChanges !== undefined) {
+      writer.uint32(32).bool(message.checkUnsavedChanges);
+    }
+    if (message.saveChanges !== undefined) {
+      writer.uint32(40).bool(message.saveChanges);
+    }
+    if (message.discardChanges !== undefined) {
+      writer.uint32(48).bool(message.discardChanges);
     }
     return writer;
   },
@@ -181,6 +248,27 @@ export const Request = {
 
           message.setMacroDetails = SetMacroDetailsRequest.decode(reader, reader.uint32());
           continue;
+        case 4:
+          if (tag !== 32) {
+            break;
+          }
+
+          message.checkUnsavedChanges = reader.bool();
+          continue;
+        case 5:
+          if (tag !== 40) {
+            break;
+          }
+
+          message.saveChanges = reader.bool();
+          continue;
+        case 6:
+          if (tag !== 48) {
+            break;
+          }
+
+          message.discardChanges = reader.bool();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -197,6 +285,11 @@ export const Request = {
       setMacroDetails: isSet(object.setMacroDetails)
         ? SetMacroDetailsRequest.fromJSON(object.setMacroDetails)
         : undefined,
+      checkUnsavedChanges: isSet(object.checkUnsavedChanges)
+        ? globalThis.Boolean(object.checkUnsavedChanges)
+        : undefined,
+      saveChanges: isSet(object.saveChanges) ? globalThis.Boolean(object.saveChanges) : undefined,
+      discardChanges: isSet(object.discardChanges) ? globalThis.Boolean(object.discardChanges) : undefined,
     };
   },
 
@@ -211,6 +304,15 @@ export const Request = {
     if (message.setMacroDetails !== undefined) {
       obj.setMacroDetails = SetMacroDetailsRequest.toJSON(message.setMacroDetails);
     }
+    if (message.checkUnsavedChanges !== undefined) {
+      obj.checkUnsavedChanges = message.checkUnsavedChanges;
+    }
+    if (message.saveChanges !== undefined) {
+      obj.saveChanges = message.saveChanges;
+    }
+    if (message.discardChanges !== undefined) {
+      obj.discardChanges = message.discardChanges;
+    }
     return obj;
   },
 
@@ -224,12 +326,22 @@ export const Request = {
     message.setMacroDetails = (object.setMacroDetails !== undefined && object.setMacroDetails !== null)
       ? SetMacroDetailsRequest.fromPartial(object.setMacroDetails)
       : undefined;
+    message.checkUnsavedChanges = object.checkUnsavedChanges ?? undefined;
+    message.saveChanges = object.saveChanges ?? undefined;
+    message.discardChanges = object.discardChanges ?? undefined;
     return message;
   },
 };
 
 function createBaseResponse(): Response {
-  return { getMacroList: undefined, getMacroDetails: undefined, setMacroDetails: undefined };
+  return {
+    getMacroList: undefined,
+    getMacroDetails: undefined,
+    setMacroDetails: undefined,
+    checkUnsavedChanges: undefined,
+    saveChanges: undefined,
+    discardChanges: undefined,
+  };
 }
 
 export const Response = {
@@ -242,6 +354,15 @@ export const Response = {
     }
     if (message.setMacroDetails !== undefined) {
       writer.uint32(24).int32(message.setMacroDetails);
+    }
+    if (message.checkUnsavedChanges !== undefined) {
+      writer.uint32(32).bool(message.checkUnsavedChanges);
+    }
+    if (message.saveChanges !== undefined) {
+      SaveChangesResponse.encode(message.saveChanges, writer.uint32(42).fork()).ldelim();
+    }
+    if (message.discardChanges !== undefined) {
+      writer.uint32(48).bool(message.discardChanges);
     }
     return writer;
   },
@@ -274,6 +395,27 @@ export const Response = {
 
           message.setMacroDetails = reader.int32() as any;
           continue;
+        case 4:
+          if (tag !== 32) {
+            break;
+          }
+
+          message.checkUnsavedChanges = reader.bool();
+          continue;
+        case 5:
+          if (tag !== 42) {
+            break;
+          }
+
+          message.saveChanges = SaveChangesResponse.decode(reader, reader.uint32());
+          continue;
+        case 6:
+          if (tag !== 48) {
+            break;
+          }
+
+          message.discardChanges = reader.bool();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -290,6 +432,11 @@ export const Response = {
       setMacroDetails: isSet(object.setMacroDetails)
         ? setMacroDetailsResponseFromJSON(object.setMacroDetails)
         : undefined,
+      checkUnsavedChanges: isSet(object.checkUnsavedChanges)
+        ? globalThis.Boolean(object.checkUnsavedChanges)
+        : undefined,
+      saveChanges: isSet(object.saveChanges) ? SaveChangesResponse.fromJSON(object.saveChanges) : undefined,
+      discardChanges: isSet(object.discardChanges) ? globalThis.Boolean(object.discardChanges) : undefined,
     };
   },
 
@@ -303,6 +450,15 @@ export const Response = {
     }
     if (message.setMacroDetails !== undefined) {
       obj.setMacroDetails = setMacroDetailsResponseToJSON(message.setMacroDetails);
+    }
+    if (message.checkUnsavedChanges !== undefined) {
+      obj.checkUnsavedChanges = message.checkUnsavedChanges;
+    }
+    if (message.saveChanges !== undefined) {
+      obj.saveChanges = SaveChangesResponse.toJSON(message.saveChanges);
+    }
+    if (message.discardChanges !== undefined) {
+      obj.discardChanges = message.discardChanges;
     }
     return obj;
   },
@@ -319,6 +475,11 @@ export const Response = {
       ? MacroDetails.fromPartial(object.getMacroDetails)
       : undefined;
     message.setMacroDetails = object.setMacroDetails ?? undefined;
+    message.checkUnsavedChanges = object.checkUnsavedChanges ?? undefined;
+    message.saveChanges = (object.saveChanges !== undefined && object.saveChanges !== null)
+      ? SaveChangesResponse.fromPartial(object.saveChanges)
+      : undefined;
+    message.discardChanges = object.discardChanges ?? undefined;
     return message;
   },
 };
@@ -710,12 +871,89 @@ export const SetMacroDetailsRequest = {
   },
 };
 
+function createBaseSaveChangesResponse(): SaveChangesResponse {
+  return { ok: undefined, err: undefined };
+}
+
+export const SaveChangesResponse = {
+  encode(message: SaveChangesResponse, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.ok !== undefined) {
+      writer.uint32(8).bool(message.ok);
+    }
+    if (message.err !== undefined) {
+      writer.uint32(16).int32(message.err);
+    }
+    return writer;
+  },
+
+  decode(input: _m0.Reader | Uint8Array, length?: number): SaveChangesResponse {
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSaveChangesResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if (tag !== 8) {
+            break;
+          }
+
+          message.ok = reader.bool();
+          continue;
+        case 2:
+          if (tag !== 16) {
+            break;
+          }
+
+          message.err = reader.int32() as any;
+          continue;
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SaveChangesResponse {
+    return {
+      ok: isSet(object.ok) ? globalThis.Boolean(object.ok) : undefined,
+      err: isSet(object.err) ? saveChangesErrorCodeFromJSON(object.err) : undefined,
+    };
+  },
+
+  toJSON(message: SaveChangesResponse): unknown {
+    const obj: any = {};
+    if (message.ok !== undefined) {
+      obj.ok = message.ok;
+    }
+    if (message.err !== undefined) {
+      obj.err = saveChangesErrorCodeToJSON(message.err);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SaveChangesResponse>, I>>(base?: I): SaveChangesResponse {
+    return SaveChangesResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SaveChangesResponse>, I>>(object: I): SaveChangesResponse {
+    const message = createBaseSaveChangesResponse();
+    message.ok = object.ok ?? undefined;
+    message.err = object.err ?? undefined;
+    return message;
+  },
+};
+
 function createBaseNotification(): Notification {
-  return {};
+  return { unsavedChangesStatusChanged: undefined };
 }
 
 export const Notification = {
-  encode(_: Notification, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+  encode(message: Notification, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.unsavedChangesStatusChanged !== undefined) {
+      writer.uint32(8).bool(message.unsavedChangesStatusChanged);
+    }
     return writer;
   },
 
@@ -726,6 +964,13 @@ export const Notification = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
+        case 1:
+          if (tag !== 8) {
+            break;
+          }
+
+          message.unsavedChangesStatusChanged = reader.bool();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -735,20 +980,28 @@ export const Notification = {
     return message;
   },
 
-  fromJSON(_: any): Notification {
-    return {};
+  fromJSON(object: any): Notification {
+    return {
+      unsavedChangesStatusChanged: isSet(object.unsavedChangesStatusChanged)
+        ? globalThis.Boolean(object.unsavedChangesStatusChanged)
+        : undefined,
+    };
   },
 
-  toJSON(_: Notification): unknown {
+  toJSON(message: Notification): unknown {
     const obj: any = {};
+    if (message.unsavedChangesStatusChanged !== undefined) {
+      obj.unsavedChangesStatusChanged = message.unsavedChangesStatusChanged;
+    }
     return obj;
   },
 
   create<I extends Exact<DeepPartial<Notification>, I>>(base?: I): Notification {
     return Notification.fromPartial(base ?? ({} as any));
   },
-  fromPartial<I extends Exact<DeepPartial<Notification>, I>>(_: I): Notification {
+  fromPartial<I extends Exact<DeepPartial<Notification>, I>>(object: I): Notification {
     const message = createBaseNotification();
+    message.unsavedChangesStatusChanged = object.unsavedChangesStatusChanged ?? undefined;
     return message;
   },
 };
