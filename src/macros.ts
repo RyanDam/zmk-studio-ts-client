@@ -163,7 +163,6 @@ export interface MacroInfo {
 export interface MacroStep {
   mode: MacroMode;
   waitMs: number;
-  tapMs: number;
   binding: BehaviorBinding | undefined;
 }
 
@@ -618,7 +617,7 @@ export const MacroInfo = {
 };
 
 function createBaseMacroStep(): MacroStep {
-  return { mode: 0, waitMs: 0, tapMs: 0, binding: undefined };
+  return { mode: 0, waitMs: 0, binding: undefined };
 }
 
 export const MacroStep = {
@@ -629,11 +628,8 @@ export const MacroStep = {
     if (message.waitMs !== 0) {
       writer.uint32(16).uint32(message.waitMs);
     }
-    if (message.tapMs !== 0) {
-      writer.uint32(24).uint32(message.tapMs);
-    }
     if (message.binding !== undefined) {
-      BehaviorBinding.encode(message.binding, writer.uint32(34).fork()).ldelim();
+      BehaviorBinding.encode(message.binding, writer.uint32(26).fork()).ldelim();
     }
     return writer;
   },
@@ -660,14 +656,7 @@ export const MacroStep = {
           message.waitMs = reader.uint32();
           continue;
         case 3:
-          if (tag !== 24) {
-            break;
-          }
-
-          message.tapMs = reader.uint32();
-          continue;
-        case 4:
-          if (tag !== 34) {
+          if (tag !== 26) {
             break;
           }
 
@@ -686,7 +675,6 @@ export const MacroStep = {
     return {
       mode: isSet(object.mode) ? macroModeFromJSON(object.mode) : 0,
       waitMs: isSet(object.waitMs) ? globalThis.Number(object.waitMs) : 0,
-      tapMs: isSet(object.tapMs) ? globalThis.Number(object.tapMs) : 0,
       binding: isSet(object.binding) ? BehaviorBinding.fromJSON(object.binding) : undefined,
     };
   },
@@ -698,9 +686,6 @@ export const MacroStep = {
     }
     if (message.waitMs !== 0) {
       obj.waitMs = Math.round(message.waitMs);
-    }
-    if (message.tapMs !== 0) {
-      obj.tapMs = Math.round(message.tapMs);
     }
     if (message.binding !== undefined) {
       obj.binding = BehaviorBinding.toJSON(message.binding);
@@ -715,7 +700,6 @@ export const MacroStep = {
     const message = createBaseMacroStep();
     message.mode = object.mode ?? 0;
     message.waitMs = object.waitMs ?? 0;
-    message.tapMs = object.tapMs ?? 0;
     message.binding = (object.binding !== undefined && object.binding !== null)
       ? BehaviorBinding.fromPartial(object.binding)
       : undefined;
