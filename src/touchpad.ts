@@ -121,6 +121,39 @@ export function bindResultToJSON(object: BindResult): string {
   }
 }
 
+export enum SensitivityResult {
+  SENSITIVITY_OK = 0,
+  SENSITIVITY_INVALID_VALUE = 1,
+  UNRECOGNIZED = -1,
+}
+
+export function sensitivityResultFromJSON(object: any): SensitivityResult {
+  switch (object) {
+    case 0:
+    case "SENSITIVITY_OK":
+      return SensitivityResult.SENSITIVITY_OK;
+    case 1:
+    case "SENSITIVITY_INVALID_VALUE":
+      return SensitivityResult.SENSITIVITY_INVALID_VALUE;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return SensitivityResult.UNRECOGNIZED;
+  }
+}
+
+export function sensitivityResultToJSON(object: SensitivityResult): string {
+  switch (object) {
+    case SensitivityResult.SENSITIVITY_OK:
+      return "SENSITIVITY_OK";
+    case SensitivityResult.SENSITIVITY_INVALID_VALUE:
+      return "SENSITIVITY_INVALID_VALUE";
+    case SensitivityResult.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export enum SaveResult {
   SAVE_OK = 0,
   SAVE_ERR = 1,
@@ -156,6 +189,7 @@ export function saveResultToJSON(object: SaveResult): string {
 
 export interface TouchpadConfig {
   layers: Layer[];
+  sensitivity: number;
 }
 
 export interface Layer {
@@ -172,6 +206,7 @@ export interface Request {
   checkUnsavedChanges?: CheckUnsavedChangesRequest | undefined;
   saveChanges?: SaveChangesRequest | undefined;
   discardChanges?: DiscardChangesRequest | undefined;
+  setSensitivity?: SetSensitivityRequest | undefined;
 }
 
 export interface GetTouchpadConfigRequest {
@@ -196,6 +231,10 @@ export interface SaveChangesRequest {
 export interface DiscardChangesRequest {
 }
 
+export interface SetSensitivityRequest {
+  sensitivity: number;
+}
+
 export interface Response {
   getConfig?: TouchpadConfig | undefined;
   setMode?: SetTouchpadModeResponse | undefined;
@@ -203,6 +242,7 @@ export interface Response {
   checkUnsavedChanges?: boolean | undefined;
   saveChanges?: SaveChangesResponse | undefined;
   discardChanges?: boolean | undefined;
+  setSensitivity?: SetSensitivityResponse | undefined;
 }
 
 export interface SetTouchpadModeResponse {
@@ -211,6 +251,10 @@ export interface SetTouchpadModeResponse {
 
 export interface SetLayerBindingsResponse {
   result: BindResult;
+}
+
+export interface SetSensitivityResponse {
+  result: SensitivityResult;
 }
 
 export interface SaveChangesResponse {
@@ -227,13 +271,16 @@ export interface Notification {
 }
 
 function createBaseTouchpadConfig(): TouchpadConfig {
-  return { layers: [] };
+  return { layers: [], sensitivity: 0 };
 }
 
 export const TouchpadConfig = {
   encode(message: TouchpadConfig, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
     for (const v of message.layers) {
       Layer.encode(v!, writer.uint32(10).fork()).ldelim();
+    }
+    if (message.sensitivity !== 0) {
+      writer.uint32(16).uint32(message.sensitivity);
     }
     return writer;
   },
@@ -252,6 +299,13 @@ export const TouchpadConfig = {
 
           message.layers.push(Layer.decode(reader, reader.uint32()));
           continue;
+        case 2:
+          if (tag !== 16) {
+            break;
+          }
+
+          message.sensitivity = reader.uint32();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -262,13 +316,19 @@ export const TouchpadConfig = {
   },
 
   fromJSON(object: any): TouchpadConfig {
-    return { layers: globalThis.Array.isArray(object?.layers) ? object.layers.map((e: any) => Layer.fromJSON(e)) : [] };
+    return {
+      layers: globalThis.Array.isArray(object?.layers) ? object.layers.map((e: any) => Layer.fromJSON(e)) : [],
+      sensitivity: isSet(object.sensitivity) ? globalThis.Number(object.sensitivity) : 0,
+    };
   },
 
   toJSON(message: TouchpadConfig): unknown {
     const obj: any = {};
     if (message.layers?.length) {
       obj.layers = message.layers.map((e) => Layer.toJSON(e));
+    }
+    if (message.sensitivity !== 0) {
+      obj.sensitivity = Math.round(message.sensitivity);
     }
     return obj;
   },
@@ -279,6 +339,7 @@ export const TouchpadConfig = {
   fromPartial<I extends Exact<DeepPartial<TouchpadConfig>, I>>(object: I): TouchpadConfig {
     const message = createBaseTouchpadConfig();
     message.layers = object.layers?.map((e) => Layer.fromPartial(e)) || [];
+    message.sensitivity = object.sensitivity ?? 0;
     return message;
   },
 };
@@ -397,6 +458,7 @@ function createBaseRequest(): Request {
     checkUnsavedChanges: undefined,
     saveChanges: undefined,
     discardChanges: undefined,
+    setSensitivity: undefined,
   };
 }
 
@@ -419,6 +481,9 @@ export const Request = {
     }
     if (message.discardChanges !== undefined) {
       DiscardChangesRequest.encode(message.discardChanges, writer.uint32(50).fork()).ldelim();
+    }
+    if (message.setSensitivity !== undefined) {
+      SetSensitivityRequest.encode(message.setSensitivity, writer.uint32(58).fork()).ldelim();
     }
     return writer;
   },
@@ -472,6 +537,13 @@ export const Request = {
 
           message.discardChanges = DiscardChangesRequest.decode(reader, reader.uint32());
           continue;
+        case 7:
+          if (tag !== 58) {
+            break;
+          }
+
+          message.setSensitivity = SetSensitivityRequest.decode(reader, reader.uint32());
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -493,6 +565,7 @@ export const Request = {
         : undefined,
       saveChanges: isSet(object.saveChanges) ? SaveChangesRequest.fromJSON(object.saveChanges) : undefined,
       discardChanges: isSet(object.discardChanges) ? DiscardChangesRequest.fromJSON(object.discardChanges) : undefined,
+      setSensitivity: isSet(object.setSensitivity) ? SetSensitivityRequest.fromJSON(object.setSensitivity) : undefined,
     };
   },
 
@@ -515,6 +588,9 @@ export const Request = {
     }
     if (message.discardChanges !== undefined) {
       obj.discardChanges = DiscardChangesRequest.toJSON(message.discardChanges);
+    }
+    if (message.setSensitivity !== undefined) {
+      obj.setSensitivity = SetSensitivityRequest.toJSON(message.setSensitivity);
     }
     return obj;
   },
@@ -541,6 +617,9 @@ export const Request = {
       : undefined;
     message.discardChanges = (object.discardChanges !== undefined && object.discardChanges !== null)
       ? DiscardChangesRequest.fromPartial(object.discardChanges)
+      : undefined;
+    message.setSensitivity = (object.setSensitivity !== undefined && object.setSensitivity !== null)
+      ? SetSensitivityRequest.fromPartial(object.setSensitivity)
       : undefined;
     return message;
   },
@@ -868,6 +947,63 @@ export const DiscardChangesRequest = {
   },
 };
 
+function createBaseSetSensitivityRequest(): SetSensitivityRequest {
+  return { sensitivity: 0 };
+}
+
+export const SetSensitivityRequest = {
+  encode(message: SetSensitivityRequest, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.sensitivity !== 0) {
+      writer.uint32(8).uint32(message.sensitivity);
+    }
+    return writer;
+  },
+
+  decode(input: _m0.Reader | Uint8Array, length?: number): SetSensitivityRequest {
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSetSensitivityRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if (tag !== 8) {
+            break;
+          }
+
+          message.sensitivity = reader.uint32();
+          continue;
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SetSensitivityRequest {
+    return { sensitivity: isSet(object.sensitivity) ? globalThis.Number(object.sensitivity) : 0 };
+  },
+
+  toJSON(message: SetSensitivityRequest): unknown {
+    const obj: any = {};
+    if (message.sensitivity !== 0) {
+      obj.sensitivity = Math.round(message.sensitivity);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SetSensitivityRequest>, I>>(base?: I): SetSensitivityRequest {
+    return SetSensitivityRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SetSensitivityRequest>, I>>(object: I): SetSensitivityRequest {
+    const message = createBaseSetSensitivityRequest();
+    message.sensitivity = object.sensitivity ?? 0;
+    return message;
+  },
+};
+
 function createBaseResponse(): Response {
   return {
     getConfig: undefined,
@@ -876,6 +1012,7 @@ function createBaseResponse(): Response {
     checkUnsavedChanges: undefined,
     saveChanges: undefined,
     discardChanges: undefined,
+    setSensitivity: undefined,
   };
 }
 
@@ -898,6 +1035,9 @@ export const Response = {
     }
     if (message.discardChanges !== undefined) {
       writer.uint32(48).bool(message.discardChanges);
+    }
+    if (message.setSensitivity !== undefined) {
+      SetSensitivityResponse.encode(message.setSensitivity, writer.uint32(58).fork()).ldelim();
     }
     return writer;
   },
@@ -951,6 +1091,13 @@ export const Response = {
 
           message.discardChanges = reader.bool();
           continue;
+        case 7:
+          if (tag !== 58) {
+            break;
+          }
+
+          message.setSensitivity = SetSensitivityResponse.decode(reader, reader.uint32());
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -972,6 +1119,7 @@ export const Response = {
         : undefined,
       saveChanges: isSet(object.saveChanges) ? SaveChangesResponse.fromJSON(object.saveChanges) : undefined,
       discardChanges: isSet(object.discardChanges) ? globalThis.Boolean(object.discardChanges) : undefined,
+      setSensitivity: isSet(object.setSensitivity) ? SetSensitivityResponse.fromJSON(object.setSensitivity) : undefined,
     };
   },
 
@@ -995,6 +1143,9 @@ export const Response = {
     if (message.discardChanges !== undefined) {
       obj.discardChanges = message.discardChanges;
     }
+    if (message.setSensitivity !== undefined) {
+      obj.setSensitivity = SetSensitivityResponse.toJSON(message.setSensitivity);
+    }
     return obj;
   },
 
@@ -1017,6 +1168,9 @@ export const Response = {
       ? SaveChangesResponse.fromPartial(object.saveChanges)
       : undefined;
     message.discardChanges = object.discardChanges ?? undefined;
+    message.setSensitivity = (object.setSensitivity !== undefined && object.setSensitivity !== null)
+      ? SetSensitivityResponse.fromPartial(object.setSensitivity)
+      : undefined;
     return message;
   },
 };
@@ -1130,6 +1284,63 @@ export const SetLayerBindingsResponse = {
   },
   fromPartial<I extends Exact<DeepPartial<SetLayerBindingsResponse>, I>>(object: I): SetLayerBindingsResponse {
     const message = createBaseSetLayerBindingsResponse();
+    message.result = object.result ?? 0;
+    return message;
+  },
+};
+
+function createBaseSetSensitivityResponse(): SetSensitivityResponse {
+  return { result: 0 };
+}
+
+export const SetSensitivityResponse = {
+  encode(message: SetSensitivityResponse, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.result !== 0) {
+      writer.uint32(8).int32(message.result);
+    }
+    return writer;
+  },
+
+  decode(input: _m0.Reader | Uint8Array, length?: number): SetSensitivityResponse {
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSetSensitivityResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if (tag !== 8) {
+            break;
+          }
+
+          message.result = reader.int32() as any;
+          continue;
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SetSensitivityResponse {
+    return { result: isSet(object.result) ? sensitivityResultFromJSON(object.result) : 0 };
+  },
+
+  toJSON(message: SetSensitivityResponse): unknown {
+    const obj: any = {};
+    if (message.result !== 0) {
+      obj.result = sensitivityResultToJSON(message.result);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SetSensitivityResponse>, I>>(base?: I): SetSensitivityResponse {
+    return SetSensitivityResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SetSensitivityResponse>, I>>(object: I): SetSensitivityResponse {
+    const message = createBaseSetSensitivityResponse();
     message.result = object.result ?? 0;
     return message;
   },
