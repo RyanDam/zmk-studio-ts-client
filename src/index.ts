@@ -2,6 +2,7 @@ import { Request, Response, RequestResponse, Notification } from './studio';
 
 import { get_encoder, get_decoder } from './framing';
 import { RpcTransport } from './transport';
+import { diag, ts } from './diag';
 
 import { Mutex } from 'async-mutex';
 import { ErrorConditions } from './meta';
@@ -19,11 +20,57 @@ export interface CreateRpcConnectionOpts {
   signal?: AbortSignal;
 }
 
+function request_name(req: Request): string {
+  const fields = [
+    'core',
+    'behaviors',
+    'keymap',
+    'sensors',
+    'macros',
+    'touchpad',
+  ] as const;
+  for (const f of fields) {
+    if (req[f]) return f;
+  }
+  return 'unknown';
+}
+
+function response_name(rr: RequestResponse): string {
+  const fields = [
+    'meta',
+    'core',
+    'behaviors',
+    'keymap',
+    'sensors',
+    'macros',
+    'touchpad',
+  ] as const;
+  for (const f of fields) {
+    if (rr[f]) return f;
+  }
+  return 'unknown';
+}
+
+function notification_name(n: Notification): string {
+  const fields = ['core', 'keymap', 'sensors', 'macros', 'touchpad'] as const;
+  for (const f of fields) {
+    if (n[f]) return f;
+  }
+  return 'unknown';
+}
+
 export function create_rpc_connection(transport: RpcTransport, opts?: CreateRpcConnectionOpts): RpcConnection {
+  diag('create_rpc_connection for transport:', transport.label);
+
   let { writable: request_writable, readable: byte_readable } =
     new TransformStream<Request, Uint8Array>({
       transform(chunk, controller) {
         let bytes = Request.encode(chunk).finish();
+        diag(
+          'REQUEST #' + chunk.requestId + ' (' + request_name(chunk) + ') encoded to',
+          bytes.length,
+          'bytes'
+        );
         controller.enqueue(bytes);
       },
     });
@@ -32,7 +79,8 @@ export function create_rpc_connection(transport: RpcTransport, opts?: CreateRpcC
     .pipeThrough(new TransformStream(get_encoder()), { signal: opts?.signal })
     .pipeTo(transport.writable, { signal: opts?.signal });
 
-  reqPipelineClosed.catch((r) => { console.log("Closed error", r); return r }).then(async (reason: any) => {
+  reqPipelineClosed.catch((r) => { diag('request pipeline closed with error:', String(r)); return r }).then(async (reason: any) => {
+    diag('request pipeline closed, reason:', String(reason));
     await byte_readable.cancel();
     transport.abortController.abort(reason);
   });
@@ -42,7 +90,29 @@ export function create_rpc_connection(transport: RpcTransport, opts?: CreateRpcC
     .pipeThrough(
       new TransformStream({
         transform(chunk, controller) {
-          controller.enqueue(Response.decode(chunk));
+          let decoded = Response.decode(chunk);
+          if (decoded.requestResponse) {
+            diag(
+              'DECODED response frame: requestId',
+              decoded.requestResponse.requestId,
+              'field',
+              response_name(decoded.requestResponse),
+              'from',
+              chunk.length,
+              'payload bytes'
+            );
+          } else if (decoded.notification) {
+            diag(
+              'DECODED notification frame: field',
+              notification_name(decoded.notification),
+              'from',
+              chunk.length,
+              'payload bytes'
+            );
+          } else {
+            diag('DECODED empty frame from', chunk.length, 'payload bytes');
+          }
+          controller.enqueue(decoded);
         },
       }),
       { signal: opts?.signal }
@@ -54,6 +124,12 @@ export function create_rpc_connection(transport: RpcTransport, opts?: CreateRpcC
     new TransformStream({
       transform(chunk, controller) {
         if (chunk.requestResponse) {
+          diag(
+            'RESPONSE branch: consumed response requestId',
+            chunk.requestResponse.requestId,
+            'field',
+            response_name(chunk.requestResponse)
+          );
           controller.enqueue(chunk.requestResponse);
         }
       },
@@ -65,6 +141,10 @@ export function create_rpc_connection(transport: RpcTransport, opts?: CreateRpcC
     new TransformStream({
       transform(chunk, controller) {
         if (chunk.notification) {
+          diag(
+            'NOTIFICATION branch: consumed notification field',
+            notification_name(chunk.notification)
+          );
           controller.enqueue(chunk.notification);
         }
       },
@@ -100,6 +180,29 @@ export class MetaError extends Error {
   }
 }
 
+/**
+ * DIAGNOSTIC: maximum time to wait for an RPC response before giving up.
+ * Without this, a stalled read holds the RPC mutex forever and no further
+ * calls can be made. Remove for production.
+ */
+const RPC_READ_TIMEOUT_MS = 10000;
+
+export class RpcReadTimeoutError extends Error {
+  readonly requestId: number;
+
+  constructor(requestId: number) {
+    super(
+      'No RPC response for request ' +
+        requestId +
+        ' within ' +
+        RPC_READ_TIMEOUT_MS +
+        'ms'
+    );
+    this.requestId = requestId;
+    Object.setPrototypeOf(this, RpcReadTimeoutError.prototype);
+  }
+}
+
 export async function call_rpc(
   conn: RpcConnection,
   req: Omit<Request, 'requestId'>
@@ -107,29 +210,74 @@ export async function call_rpc(
   return await rpcMutex.runExclusive(async () => {
     let request: Request = { ...req, requestId: conn.current_request++ };
 
+    diag(
+      'call_rpc: request #' + request.requestId + ' (' + request_name(request) + ') — writing'
+    );
+
     let writer = conn.request_writable.getWriter();
     await writer.write(request);
     writer.releaseLock();
+    diag('call_rpc: request #' + request.requestId + ' written at', ts());
 
     let reader = conn.request_response_readable.getReader();
 
-    let { done, value } = await reader.read();
-    reader.releaseLock();
+    let readPromise = reader.read();
+    // If the timeout below fires first, releaseLock() rejects this pending
+    // read with a TypeError (per the Streams spec); handle it here so it is
+    // not reported as an unhandled rejection.
+    readPromise.catch((e) => {
+      diag('call_rpc: pending read rejected after release:', String(e));
+    });
 
-    if (done || !value) {
-      throw 'No response';
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        diag(
+          'call_rpc: TIMEOUT — no response for request #' +
+            request.requestId +
+            ' after',
+          RPC_READ_TIMEOUT_MS,
+          'ms'
+        );
+        reject(new RpcReadTimeoutError(request.requestId));
+      }, RPC_READ_TIMEOUT_MS);
+    });
+
+    try {
+      let { done, value } = await Promise.race([readPromise, timeoutPromise]);
+
+      if (done || !value) {
+        diag(
+          'call_rpc: stream closed, no response for request #' +
+            request.requestId
+        );
+        throw 'No response';
+      }
+
+      if (value.requestId != request.requestId) {
+        diag(
+          'call_rpc: MISMATCH — got response #' +
+            value.requestId +
+            ' for request #' +
+            request.requestId
+        );
+        throw 'Mismatch request IDs';
+      }
+
+      diag('call_rpc: response #' + value.requestId + ' received at', ts());
+
+      if (value.meta?.noResponse) {
+        throw new NoResponseError();
+      } else if (value.meta?.simpleError) {
+        throw new MetaError(value.meta.simpleError);
+      }
+
+      return value;
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      reader.releaseLock();
     }
-
-    if (value.requestId != request.requestId) {
-      throw 'Mismatch request IDs';
-    }
-
-    if (value.meta?.noResponse) {
-      throw new NoResponseError();
-    } else if (value.meta?.simpleError) {
-      throw new MetaError(value.meta.simpleError);
-    }
-
-    return value;
   });
 }
