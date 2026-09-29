@@ -2,7 +2,7 @@ import { Request, Response, RequestResponse, Notification } from './studio';
 
 import { get_encoder, get_decoder } from './framing';
 import { RpcTransport } from './transport';
-import { diag, ts } from './diag';
+import { diag, hex, ts } from './diag';
 
 import { Mutex } from 'async-mutex';
 import { ErrorConditions } from './meta';
@@ -75,8 +75,18 @@ export function create_rpc_connection(transport: RpcTransport, opts?: CreateRpcC
       },
     });
 
+  // DIAGNOSTIC: log everything crossing the transport boundary (framed
+  // bytes), regardless of which transport implementation the app provides.
+  let txLog = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      diag('TRANSPORT TX:', chunk.length, 'bytes:', hex(chunk));
+      controller.enqueue(chunk);
+    },
+  });
+
   let reqPipelineClosed = byte_readable
     .pipeThrough(new TransformStream(get_encoder()), { signal: opts?.signal })
+    .pipeThrough(txLog, { signal: opts?.signal })
     .pipeTo(transport.writable, { signal: opts?.signal });
 
   reqPipelineClosed.catch((r) => { diag('request pipeline closed with error:', String(r)); return r }).then(async (reason: any) => {
@@ -85,7 +95,15 @@ export function create_rpc_connection(transport: RpcTransport, opts?: CreateRpcC
     transport.abortController.abort(reason);
   });
 
+  let rxLog = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      diag('TRANSPORT RX:', chunk.length, 'bytes:', hex(chunk));
+      controller.enqueue(chunk);
+    },
+  });
+
   let response_readable = transport.readable
+    .pipeThrough(rxLog, { signal: opts?.signal })
     .pipeThrough(new TransformStream(get_decoder()), { signal: opts?.signal })
     .pipeThrough(
       new TransformStream({
